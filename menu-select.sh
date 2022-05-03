@@ -1,70 +1,58 @@
 #!/bin/bash
 function menu-select {
-  # Initial Setup
-  local downkey=$'\x1b[B'
-  local upkey=$'\x1b[A'
-  local enter=""
-  n=$[$#-1]
-  idx=0
- 
-  # Helper Functions
-  cursor_blink_on()  { printf "\033[?25h"; }
-  cursor_blink_off() { printf "\033[?25l"; }
-  cursor_down() { if [ $1 -gt 0 ]; then echo -en "\033[$1B"; fi }
-  cursor_up()   { if [ $1 -gt 0 ]; then echo -en "\033[$1A"; fi }
-  cleanup() { cursor_down $[$n-$idx]; cursor_blink_on; stty echo; printf '\n'; }
 
-  trap "cleanup;" EXIT
-  cursor_blink_off
+    # helpers
+    ESC=$( printf "\033")
+    cursor_blink_on()  { printf "$ESC[?25h"; }
+    cursor_blink_off() { printf "$ESC[?25l"; }
+    cursor_to()        { printf "$ESC[$1;${2:-1}H"; }
+    print_option()     { printf "   $1 "; }
+    print_selected()   { printf "  $ESC[7m $1 $ESC[27m"; }
+    get_cursor_row()   { IFS=';' read -sdR -p $'\E[6n' ROW COL; echo ${ROW#*[}; }
+    key_input()        { read -s -n3 key 2>/dev/null >&2
+                         if [[ $key = $ESC[A ]]; then echo up;    fi
+                         if [[ $key = $ESC[B ]]; then echo down;  fi
+                         if [[ $key = ""     ]]; then echo enter; fi; }
 
-  # Main Loop
-  while true; do
-    
-    # Draw Opts
-    cursor_up $idx
-    i=0
-    for opt in $@; do
-      if [[ "${options[$idx]}" = $opt ]]; then
-        echo -e "  \033[7m $opt \033[27m"; 
-      else
-        echo -e "   $opt "
-      fi
-      ((i++))
+    # initially print empty new lines (scroll down if at bottom of screen)
+    for opt; do printf "\n"; done
+
+    # determine current screen position for overwriting the options
+    local lastrow=`get_cursor_row`
+    local startrow=$(($lastrow - $#))
+
+    # ensure cursor and input echoing back on upon a ctrl+c during read -s
+    trap "cursor_blink_on; stty echo; printf '\n';" EXIT
+    cursor_blink_off
+
+    local selected=0
+    while true; do
+        # print options by overwriting the last lines
+        local idx=0
+        for opt; do
+            cursor_to $(($startrow + $idx))
+            if [ $idx -eq $selected ]; then
+                print_selected "$opt"
+            else
+                print_option "$opt"
+            fi
+            ((idx++))
+        done
+
+        # user key control
+        case `key_input` in
+            enter) break;;
+            up)    ((selected--));
+                   if [ $selected -lt 0 ]; then selected=$(($# - 1)); fi;;
+            down)  ((selected++));
+                   if [ $selected -ge $# ]; then selected=0; fi;;
+        esac
     done
 
-    # Reset Cursor
-    cursor_up $[$#-$idx]
- 
-    # Read User Input
-    read -sn3 input_key
-    case $input_key in
-      $downkey)
-        if [ $idx -lt $n ]; then
-          ((idx++)); cursor_down 1
-        else
-          idx=0; cursor_up $n
-        fi ;;
-      $upkey)
-        if [ $idx -gt 0 ]; then
-          ((idx--)); cursor_up 1;
-        else 
-          idx=$n; cursor_down $n
-        fi ;;
-      $enter)
-        break ;;
-    esac
-  done
+    # cursor position back to normal
+    cursor_to $lastrow
+    printf "\n"
+    cursor_blink_on
 
-  cleanup
-  return $idx
+    return $selected
 }
-
-
-function git-branch-select {
-  options=( $(git for-each-ref refs/heads/ --format='%(refname:short)' --sort=-committerdate | head -10) )
-
-  menu-select "${options[@]}"
-  choice=$?
-  echo "${options[$choice]}"
-}
-
