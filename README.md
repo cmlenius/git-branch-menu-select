@@ -1,4 +1,7 @@
-# menu-select
+# git-branch-menu-select
 
-A Bash script that generates a menu selectable via arrow keys. Menu items are passed in. 
-Includes function for passing in most recently used git branches.
+A Bash script that generates a selectable menu using arrow keys for navigation. 
+Primarily used by passing in most recently used git branches making it easier to switch branches.
+
+![](preview/git-branch-menu-select.gif)
+

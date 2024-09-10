@@ -56,3 +56,8 @@ function menu-select {
 
     return $selected
 }
+
+options=( $(git for-each-ref refs/heads/ --format='%(refname:short)' --sort=-committerdate | head -15) )
+menu-select "${options[@]}"
+choice=$?
+git checkout ${options[$choice]}
